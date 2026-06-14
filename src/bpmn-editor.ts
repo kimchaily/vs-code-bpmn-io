@@ -314,6 +314,17 @@ export class BpmnEditor implements vscode.CustomEditorProvider<BpmnDocument> {
         if (!webviews.length) return;
 
         this.restoreFocusOnCanvas(webviews[0]);
+      }),
+      vscode.workspace.onDidChangeConfiguration(e => {
+        if (!e.affectsConfiguration('bpmn-io.theme')) {
+          return;
+        }
+
+        // push the new theme to all open editors without reopening them
+        const theme = getTheme();
+        for (const webviewPanel of this.webviews.all()) {
+          this.postMessage(webviewPanel, 'theme', { theme });
+        }
       })
     );
   }
@@ -473,6 +484,9 @@ export class BpmnEditor implements vscode.CustomEditorProvider<BpmnDocument> {
     const styleMainUri = webview.asWebviewUri(vscode.Uri.joinPath(
       this._context.extensionUri, 'out/client', 'bpmn-editor.css'));
 
+    // diagram color theme: 'auto' | 'light' | 'dark'
+    const theme = getTheme();
+
     // use a nonce to whitelist which scripts can be run
     const nonce = getNonce();
 
@@ -496,7 +510,7 @@ export class BpmnEditor implements vscode.CustomEditorProvider<BpmnDocument> {
 
         <title>BPMN Editor</title>
       </head>
-      <body>
+      <body class="bpmn-theme-${theme}">
         <div id="canvas"></div>
 
         <script nonce="${nonce}" src="${scriptUri}"></script>
@@ -600,6 +614,15 @@ class WebviewCollection {
   }
 
   /**
+   * Get all known webviews.
+   */
+  public *all(): Iterable<vscode.WebviewPanel> {
+    for (const entry of this._webviews) {
+      yield entry.webviewPanel;
+    }
+  }
+
+  /**
    * Add a new webview to the collection.
    */
   public add(uri: vscode.Uri, webviewPanel: vscode.WebviewPanel) {
@@ -624,6 +647,13 @@ class WebviewCollection {
   }
 }
 
+
+/**
+ * Returns the configured diagram color theme: 'auto', 'light' or 'dark'.
+ */
+function getTheme(): string {
+  return vscode.workspace.getConfiguration('bpmn-io').get<string>('theme', 'auto');
+}
 
 async function readFile(uri: vscode.Uri): Promise<string> {
   if (uri.scheme === 'untitled') {

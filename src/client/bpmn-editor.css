@@ -5,7 +5,30 @@ html, body {
 
 body {
   color: #333;
-  background: white;
+  background: #fff;
+}
+
+/*
+ * Dark theme.
+ *
+ * Applied either explicitly (`bpmn-theme-dark`) or, in `auto` mode, whenever
+ * VS Code itself uses a dark color theme. VS Code adds `vscode-dark` to the
+ * body and keeps it in sync as the user switches themes, so `auto` follows
+ * the workbench live without any JavaScript.
+ *
+ * bpmn-js renders the diagram black-on-white. We invert luminance while
+ * preserving hue (`hue-rotate(180deg)`) so user-defined element colors stay
+ * recognizable and the popup/search menus darken for free.
+ */
+body.bpmn-theme-dark,
+body.vscode-dark.bpmn-theme-auto {
+  color: #ccc;
+  background: #1e1e1e;
+}
+
+body.bpmn-theme-dark #canvas,
+body.vscode-dark.bpmn-theme-auto #canvas {
+  filter: invert(1) hue-rotate(180deg);
 }
 
 #canvas {
