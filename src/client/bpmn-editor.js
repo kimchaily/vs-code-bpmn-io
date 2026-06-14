@@ -104,8 +104,28 @@ window.addEventListener('message', async (event) => {
   case 'focusCanvas':
     modeler.get('canvas').focus();
     return;
+
+  case 'theme':
+    applyTheme(body.theme);
+    return;
   }
 });
+
+/**
+ * Apply the configured diagram theme by toggling the `bpmn-theme-*` class on
+ * the body. Other classes (e.g. VS Code's `vscode-dark`/`vscode-light`) are
+ * preserved so `auto` keeps following the workbench theme.
+ *
+ * @param {string} theme one of 'auto', 'light', 'dark'
+ */
+function applyTheme(theme) {
+  document.body.classList.remove(
+    'bpmn-theme-auto',
+    'bpmn-theme-light',
+    'bpmn-theme-dark'
+  );
+  document.body.classList.add(`bpmn-theme-${theme}`);
+}
 
 // signal to VS Code that the webview is initialized
 vscode.postMessage({ type: 'ready' });
