@@ -44,6 +44,17 @@ npm run all
 ```
 
 
+## Package as VSIX
+
+To build an installable `.vsix` package manually, run:
+
+```sh
+npm run package
+```
+
+This produces a `vs-code-bpmn-io-<version>.vsix` file in the project root, which you can install in VSCode via *Extensions: Install from VSIX...* or with `code --install-extension <file>.vsix`.
+
+
 ## License
 
 MIT
