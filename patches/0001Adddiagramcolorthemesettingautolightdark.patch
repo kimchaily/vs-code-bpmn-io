@@ -1,0 +1,217 @@
+From 4986123b7d7d538f0ba856a97ec26c78ab6456f1 Mon Sep 17 00:00:00 2001
+From: kimchaily <ly.kimchai@gmail.com>
+Date: Sun, 14 Jun 2026 12:41:27 +0000
+Subject: [PATCH] Add diagram color theme setting (auto/light/dark)
+
+Adds a `bpmn-io.theme` setting to control the diagram canvas theme:
+
+- `auto` (default): follows the active VS Code color theme. VS Code keeps
+  a `vscode-dark`/`vscode-light` class in sync on the webview body, so
+  this tracks the workbench live with no extra JavaScript.
+- `light`: always render on a light background (previous behaviour).
+- `dark`: always render on a dark background.
+
+The diagram is rendered black-on-white by bpmn-js; the dark theme inverts
+luminance while preserving hue (hue-rotate(180deg)) so user-defined
+element colors stay recognizable and the popup/search menus darken too.
+
+Changing the setting is pushed to open editors live via a
+`onDidChangeConfiguration` listener, without reopening them.
+---
+ CHANGELOG.md               |  3 +++
+ package.json               | 22 +++++++++++++++++++++-
+ src/bpmn-editor.ts         | 32 +++++++++++++++++++++++++++++++-
+ src/client/bpmn-editor.css | 25 ++++++++++++++++++++++++-
+ src/client/bpmn-editor.js  | 20 ++++++++++++++++++++
+ 5 files changed, 99 insertions(+), 3 deletions(-)
+
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index e482451..3f9d01e 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -6,6 +6,9 @@ All notable changes to the [bpmn.io vs-code extension](https://github.com/bpmn-i
+ 
+ ___Note:__ Yet to be released changes appear here._
+ 
++* `FEAT`: add `a` (append) and `n` (create) "create/append anything" keyboard shortcuts and popups
++* `FEAT`: add diagram color theme setting (`bpmn-io.theme`: `auto` / `light` / `dark`); `auto` follows the active VS Code theme
++
+ ## 0.22.2 (2025-07-04)
+ 
+ ## What's Changed
+diff --git a/package.json b/package.json
+index 9190b58..e834187 100644
+--- a/package.json
++++ b/package.json
+@@ -87,7 +87,27 @@
+           }
+         ]
+       }
+-    ]
++    ],
++    "configuration": {
++      "title": "BPMN Editor",
++      "properties": {
++        "bpmn-io.theme": {
++          "type": "string",
++          "enum": [
++            "auto",
++            "light",
++            "dark"
++          ],
++          "enumDescriptions": [
++            "Follow the active VS Code color theme (light or dark).",
++            "Always render the diagram on a light background.",
++            "Always render the diagram on a dark background."
++          ],
++          "default": "auto",
++          "markdownDescription": "Color theme of the BPMN diagram canvas."
++        }
++      }
++    }
+   },
+   "scripts": {
+     "all": "run-s lint test",
+diff --git a/src/bpmn-editor.ts b/src/bpmn-editor.ts
+index 393a684..a71bcfc 100644
+--- a/src/bpmn-editor.ts
++++ b/src/bpmn-editor.ts
+@@ -314,6 +314,17 @@ export class BpmnEditor implements vscode.CustomEditorProvider<BpmnDocument> {
+         if (!webviews.length) return;
+ 
+         this.restoreFocusOnCanvas(webviews[0]);
++      }),
++      vscode.workspace.onDidChangeConfiguration(e => {
++        if (!e.affectsConfiguration('bpmn-io.theme')) {
++          return;
++        }
++
++        // push the new theme to all open editors without reopening them
++        const theme = getTheme();
++        for (const webviewPanel of this.webviews.all()) {
++          this.postMessage(webviewPanel, 'theme', { theme });
++        }
+       })
+     );
+   }
+@@ -473,6 +484,9 @@ export class BpmnEditor implements vscode.CustomEditorProvider<BpmnDocument> {
+     const styleMainUri = webview.asWebviewUri(vscode.Uri.joinPath(
+       this._context.extensionUri, 'out/client', 'bpmn-editor.css'));
+ 
++    // diagram color theme: 'auto' | 'light' | 'dark'
++    const theme = getTheme();
++
+     // use a nonce to whitelist which scripts can be run
+     const nonce = getNonce();
+ 
+@@ -496,7 +510,7 @@ export class BpmnEditor implements vscode.CustomEditorProvider<BpmnDocument> {
+ 
+         <title>BPMN Editor</title>
+       </head>
+-      <body>
++      <body class="bpmn-theme-${theme}">
+         <div id="canvas"></div>
+ 
+         <script nonce="${nonce}" src="${scriptUri}"></script>
+@@ -599,6 +613,15 @@ class WebviewCollection {
+     }
+   }
+ 
++  /**
++   * Get all known webviews.
++   */
++  public *all(): Iterable<vscode.WebviewPanel> {
++    for (const entry of this._webviews) {
++      yield entry.webviewPanel;
++    }
++  }
++
+   /**
+    * Add a new webview to the collection.
+    */
+@@ -625,6 +648,13 @@ class WebviewCollection {
+ }
+ 
+ 
++/**
++ * Returns the configured diagram color theme: 'auto', 'light' or 'dark'.
++ */
++function getTheme(): string {
++  return vscode.workspace.getConfiguration('bpmn-io').get<string>('theme', 'auto');
++}
++
+ async function readFile(uri: vscode.Uri): Promise<string> {
+   if (uri.scheme === 'untitled') {
+     return '';
+diff --git a/src/client/bpmn-editor.css b/src/client/bpmn-editor.css
+index 9a87ace..9c92166 100644
+--- a/src/client/bpmn-editor.css
++++ b/src/client/bpmn-editor.css
+@@ -5,7 +5,30 @@ html, body {
+ 
+ body {
+   color: #333;
+-  background: white;
++  background: #fff;
++}
++
++/*
++ * Dark theme.
++ *
++ * Applied either explicitly (`bpmn-theme-dark`) or, in `auto` mode, whenever
++ * VS Code itself uses a dark color theme. VS Code adds `vscode-dark` to the
++ * body and keeps it in sync as the user switches themes, so `auto` follows
++ * the workbench live without any JavaScript.
++ *
++ * bpmn-js renders the diagram black-on-white. We invert luminance while
++ * preserving hue (`hue-rotate(180deg)`) so user-defined element colors stay
++ * recognizable and the popup/search menus darken for free.
++ */
++body.bpmn-theme-dark,
++body.vscode-dark.bpmn-theme-auto {
++  color: #ccc;
++  background: #1e1e1e;
++}
++
++body.bpmn-theme-dark #canvas,
++body.vscode-dark.bpmn-theme-auto #canvas {
++  filter: invert(1) hue-rotate(180deg);
+ }
+ 
+ #canvas {
+diff --git a/src/client/bpmn-editor.js b/src/client/bpmn-editor.js
+index 4492a2d..b3ff89f 100644
+--- a/src/client/bpmn-editor.js
++++ b/src/client/bpmn-editor.js
+@@ -104,8 +104,28 @@ window.addEventListener('message', async (event) => {
+   case 'focusCanvas':
+     modeler.get('canvas').focus();
+     return;
++
++  case 'theme':
++    applyTheme(body.theme);
++    return;
+   }
+ });
+ 
++/**
++ * Apply the configured diagram theme by toggling the `bpmn-theme-*` class on
++ * the body. Other classes (e.g. VS Code's `vscode-dark`/`vscode-light`) are
++ * preserved so `auto` keeps following the workbench theme.
++ *
++ * @param {string} theme one of 'auto', 'light', 'dark'
++ */
++function applyTheme(theme) {
++  document.body.classList.remove(
++    'bpmn-theme-auto',
++    'bpmn-theme-light',
++    'bpmn-theme-dark'
++  );
++  document.body.classList.add(`bpmn-theme-${theme}`);
++}
++
+ // signal to VS Code that the webview is initialized
+ vscode.postMessage({ type: 'ready' });
+-- 
+2.43.0
+
