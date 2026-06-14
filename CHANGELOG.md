@@ -6,6 +6,9 @@ All notable changes to the [bpmn.io vs-code extension](https://github.com/bpmn-i
 
 ___Note:__ Yet to be released changes appear here._
 
+* `FEAT`: add `a` (append) and `n` (create) "create/append anything" keyboard shortcuts and popups
+* `FEAT`: add diagram color theme setting (`bpmn-io.theme`: `auto` / `light` / `dark`); `auto` follows the active VS Code theme
+
 ## 0.22.2 (2025-07-04)
 
 ## What's Changed

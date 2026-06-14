@@ -87,7 +87,27 @@
           }
         ]
       }
-    ]
+    ],
+    "configuration": {
+      "title": "BPMN Editor",
+      "properties": {
+        "bpmn-io.theme": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "light",
+            "dark"
+          ],
+          "enumDescriptions": [
+            "Follow the active VS Code color theme (light or dark).",
+            "Always render the diagram on a light background.",
+            "Always render the diagram on a dark background."
+          ],
+          "default": "auto",
+          "markdownDescription": "Color theme of the BPMN diagram canvas."
+        }
+      }
+    }
   },
   "scripts": {
     "all": "run-s lint test",
